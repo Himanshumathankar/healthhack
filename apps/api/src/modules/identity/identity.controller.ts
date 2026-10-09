@@ -1,53 +1,59 @@
-import { Body, Controller, Post } from "@nestjs/common";
-import { registerSchema } from "@healthhack/contracts";
-import { PrismaService } from "../prisma/prisma.service.js";
-import argon2 from "argon2";
-import crypto from "node:crypto";
+import { Body, Controller, Get, Post, Query, UseGuards } from "@nestjs/common";
+import { IdentityService } from "./identity.service.js";
+import { RequestMeta, type RequestContext } from "../common/request-context.js";
+import { CurrentUser, type AuthenticatedUser } from "../common/current-user.js";
+import { SessionGuard } from "../auth/session.guard.js";
 
 @Controller("identity")
 export class IdentityController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly identity: IdentityService) {}
+
+  @Post("reset-password")
+  resetPassword(@Body() body: unknown) {
+    return this.identity.resetPassword(body);
+  }
+
+  @Post("resend-verification")
+  @UseGuards(SessionGuard)
+  resendVerification(@CurrentUser() user: AuthenticatedUser) {
+    return this.identity.resendVerification(user.id);
+  }
+
+  @Get("username-availability")
+  usernameAvailability(@Query("username") username: string) {
+    return this.identity.usernameAvailability(username);
+  }
+
+  @Post("education")
+  @UseGuards(SessionGuard)
+  education(@CurrentUser() user: AuthenticatedUser, @Body() body: unknown) {
+    return this.identity.saveEducation(user.id, body);
+  }
+
+  @Post("skills")
+  @UseGuards(SessionGuard)
+  skills(@CurrentUser() user: AuthenticatedUser, @Body() body: unknown) {
+    return this.identity.saveSkills(user.id, body);
+  }
 
   @Post("register")
-  async register(@Body() body: unknown) {
-    const input = registerSchema.parse(body);
-    const passwordHash = await argon2.hash(input.password, { type: argon2.argon2id });
-    const token = crypto.randomBytes(32).toString("base64url");
-    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
-    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24);
+  register(@Body() body: unknown, @RequestMeta() context: RequestContext) {
+    return this.identity.register(body, context);
+  }
 
-    const user = await this.prisma.user.create({
-      data: {
-        email: input.email.toLowerCase(),
-        passwordHash,
-        profile: {
-          create: {
-            fullName: input.fullName,
-            skills: []
-          }
-        },
-        emailTokens: {
-          create: {
-            tokenHash,
-            expiresAt
-          }
-        }
-      },
-      select: {
-        id: true,
-        email: true,
-        emailVerifiedAt: true,
-        profile: {
-          select: {
-            fullName: true
-          }
-        }
-      }
-    });
+  @Post("verify-email")
+  verifyEmail(@Body() body: unknown, @RequestMeta() context: RequestContext) {
+    return this.identity.verifyEmail(body, context);
+  }
 
-    return {
-      user,
-      verificationToken: process.env.NODE_ENV === "production" ? undefined : token
-    };
+  @Post("login")
+  login(@Body() body: unknown, @RequestMeta() context: RequestContext) {
+    return this.identity.login(body, context);
+  }
+
+  @Get("me")
+  @UseGuards(SessionGuard)
+  me(@CurrentUser() user: AuthenticatedUser) {
+    return this.identity.me(user.id);
   }
 }

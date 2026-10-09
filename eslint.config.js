@@ -1,10 +1,10 @@
 const base = require("@healthhack/eslint-config");
 
 module.exports = [
-  ...base,
   {
-    ignores: ["node_modules/**", "dist/**", ".next/**", "coverage/**"]
+    ignores: ["**/node_modules/**", "**/dist/**", "**/.next/**", "**/coverage/**"]
   },
+  ...base,
   {
     files: ["apps/api/src/**/*.ts"],
     rules: {

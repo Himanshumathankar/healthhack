@@ -50,12 +50,27 @@ enum InvitationStatus {
   EXPIRED
 }
 
+enum EmailMessageStatus {
+  QUEUED
+  SENDING
+  SENT
+  FAILED
+}
+
 model User {
   id                String              @id @default(uuid()) @db.Uuid
   email             String              @unique @db.Citext
+  participantId     String              @unique @default(dbgenerated("generate_participant_id()"))
+  username          String?             @unique @db.Citext
+  wantsToJoinTeam   Boolean             @default(false)
   passwordHash      String
   emailVerifiedAt   DateTime?
   globalRole        GlobalRole?
+  organizationRoleId String? @db.Uuid
+  organizationRole OrganizationRole? @relation(fields: [organizationRoleId], references: [id], onDelete: Restrict)
+  suspendedAt DateTime?
+  deletedAt DateTime?
+  lastSignInAt DateTime?
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
   profile           UserProfile?
@@ -65,13 +80,26 @@ model User {
   eventAssignments  EventRoleAssignment[]
   participants      Participant[]
   teamMemberships   TeamMember[]
+  teamJoinRequests  TeamJoinRequest[]
+  recruitmentInvitations TeamRecruitmentInvitation[]
   auditEvents        AuditLog[]          @relation("AuditActor")
+  emailMessages      EmailMessage[]
+  authoredAnnouncements Announcement[]
+  submissionReviews SubmissionReview[]
 }
 
 model UserProfile {
   userId          String   @id @db.Uuid
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   fullName        String
+  firstName       String?
+  middleName      String?
+  lastName        String?
+  passoutDate     DateTime? @db.Date
+  studyYear       Int?
+  discipline      String?
+  skillExpertise  Json     @default("[]")
+  registrationCompletedAt DateTime?
   phone           String?
   college         String?
   degree          String?
@@ -145,6 +173,7 @@ model Event {
   tracks           Track[]
   problemStatements ProblemStatement[]
   auditEvents      AuditLog[]
+  emailMessages    EmailMessage[]
 }
 
 model EventSetting {
@@ -173,6 +202,55 @@ model Permission {
   key         String           @unique
   description String?
   roles       RolePermission[]
+  organizationRoles OrganizationRolePermission[]
+}
+
+model OrganizationRole {
+  id String @id @default(uuid()) @db.Uuid
+  name String @unique @db.Citext
+  builtInKey String? @unique
+  description String?
+  initialized Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  users User[]
+  permissions OrganizationRolePermission[]
+}
+model OrganizationRolePermission {
+  roleId String @db.Uuid
+  permissionId String @db.Uuid
+  role OrganizationRole @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  @@id([roleId, permissionId])
+}
+model Announcement {
+  id String @id @default(uuid()) @db.Uuid
+  authorId String? @db.Uuid
+  author User? @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  title String
+  body String
+  published Boolean @default(false)
+  publishedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([published, publishedAt])
+}
+model OrganizationService {
+  id String @id @default(uuid()) @db.Uuid
+  name String
+  description String
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+model SupportTicket {
+  id String @id @default(uuid()) @db.Uuid
+  subject String
+  message String
+  status String @default("OPEN")
+  assignedTo String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model RolePermission {
@@ -249,8 +327,10 @@ model ProblemStatement {
 model Team {
   id                 String            @id @default(uuid()) @db.Uuid
   eventId            String            @db.Uuid
-  teamCode           String
-  name               String
+  teamCode           String            @unique @default(dbgenerated("generate_team_id()"))
+  joinCode           String            @unique @default(dbgenerated("generate_team_join_code()"))
+  requiresMembers    Boolean           @default(false)
+  name               String            @unique @db.Citext
   status             TeamStatus        @default(DRAFT)
   trackId            String?           @db.Uuid
   problemStatementId String?           @db.Uuid
@@ -262,8 +342,11 @@ model Team {
   problemStatement   ProblemStatement? @relation(fields: [problemStatementId], references: [id], onDelete: SetNull)
   members            TeamMember[]
   invitations        TeamInvitation[]
+  joinRequests       TeamJoinRequest[]
+  recruitmentInvitations TeamRecruitmentInvitation[]
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
+  submissions        Submission[]
 
   @@unique([eventId, teamCode])
   @@index([eventId, status])
@@ -272,7 +355,7 @@ model Team {
 model TeamMember {
   id        String   @id @default(uuid()) @db.Uuid
   teamId    String   @db.Uuid
-  userId    String   @db.Uuid
+  userId    String   @unique @db.Uuid
   role      TeamRole
   joinedAt  DateTime @default(now())
   team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
@@ -280,6 +363,59 @@ model TeamMember {
 
   @@unique([teamId, userId])
   @@index([userId])
+}
+
+model Submission {
+  id String @id @default(uuid()) @db.Uuid
+  teamId String @db.Uuid
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  title String
+  summary String
+  repositoryUrl String?
+  demoUrl String?
+  status String @default("SUBMITTED")
+  submittedAt DateTime @default(now())
+  reviews SubmissionReview[]
+  @@index([teamId])
+}
+model SubmissionReview {
+  id String @id @default(uuid()) @db.Uuid
+  submissionId String @db.Uuid
+  submission Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  reviewerId String? @db.Uuid
+  reviewer User? @relation(fields: [reviewerId], references: [id], onDelete: SetNull)
+  score Int
+  feedback String
+  published Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([submissionId, reviewerId])
+}
+
+model TeamJoinRequest {
+  id        String @id @default(uuid()) @db.Uuid
+  teamId    String @db.Uuid
+  userId    String @db.Uuid
+  status    String @default("PENDING")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  team      Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([teamId, userId])
+  @@index([teamId, status])
+}
+
+model TeamRecruitmentInvitation {
+  id        String @id @default(uuid()) @db.Uuid
+  teamId    String @db.Uuid
+  userId    String @db.Uuid
+  status    String @default("PENDING")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  team      Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([teamId, userId])
+  @@index([userId, status])
 }
 
 model TeamInvitation {
@@ -297,6 +433,31 @@ model TeamInvitation {
 
   @@index([teamId, status])
   @@index([invitedEmail, status])
+}
+
+model EmailMessage {
+  id                String             @id @default(uuid()) @db.Uuid
+  eventId           String?            @db.Uuid
+  recipientUserId   String?            @db.Uuid
+  toEmail           String             @db.Citext
+  templateKey       String
+  subject           String
+  htmlBody          String
+  textBody          String
+  status            EmailMessageStatus @default(QUEUED)
+  provider          String?
+  providerMessageId String?
+  error             String?
+  queuedAt          DateTime           @default(now())
+  sentAt            DateTime?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  event             Event?             @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  recipient         User?              @relation(fields: [recipientUserId], references: [id], onDelete: SetNull)
+
+  @@index([status, queuedAt])
+  @@index([eventId, templateKey, createdAt])
+  @@index([recipientUserId, createdAt])
 }
 
 model AuditLog {

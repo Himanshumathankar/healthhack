@@ -1,0 +1,1 @@
+ALTER TABLE "Team" ADD COLUMN "requiresMembers" BOOLEAN NOT NULL DEFAULT false;

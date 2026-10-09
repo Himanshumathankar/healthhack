@@ -5,6 +5,8 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev --parallel",
+    "dev:setup": "bash scripts/setup-and-run.sh",
+    "admin:bootstrap:dev": "bash scripts/bootstrap-admin.sh",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",

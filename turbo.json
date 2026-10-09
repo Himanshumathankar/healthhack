@@ -1,5 +1,31 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalPassThroughEnv": [
+    "NODE_ENV",
+    "APP_BASE_URL",
+    "API_BASE_URL",
+    "DATABASE_URL",
+    "DIRECT_DATABASE_URL",
+    "REDIS_URL",
+    "SESSION_SECRET",
+    "ENCRYPTION_KEY",
+    "STORAGE_PROVIDER",
+    "STORAGE_ENDPOINT",
+    "STORAGE_REGION",
+    "STORAGE_BUCKET",
+    "STORAGE_ACCESS_KEY_ID",
+    "STORAGE_SECRET_ACCESS_KEY",
+    "EMAIL_PROVIDER",
+    "EMAIL_FROM",
+    "MAILPIT_SMTP_HOST",
+    "MAILPIT_SMTP_PORT",
+    "RAZORPAY_KEY_ID",
+    "RAZORPAY_KEY_SECRET",
+    "GOOGLE_CLIENT_EMAIL",
+    "GOOGLE_PRIVATE_KEY",
+    "OTEL_EXPORTER_OTLP_ENDPOINT",
+    "SENTRY_DSN"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

@@ -12,6 +12,8 @@
   },
   "dependencies": {
     "@healthhack/config": "workspace:*",
+    "@healthhack/database": "workspace:*",
+    "@healthhack/email": "workspace:*",
     "@healthhack/logger": "workspace:*",
     "bullmq": "^5.34.5",
     "ioredis": "^5.4.2"

@@ -12,6 +12,18 @@ Production-oriented monorepo for the reusable HealthHack Event Operating System.
 
 ## Local Start
 
+Run the full local setup and dev stack:
+
+```sh
+pnpm dev:setup
+```
+
+This creates `.env` from `.env.example` when needed, starts Docker services, installs dependencies, generates Prisma, applies local migrations, and starts the apps.
+
+MinIO is built locally from a pinned source release because the former container image is unavailable. The first startup downloads the build dependencies and takes longer; subsequent runs reuse the local image.
+
+Manual startup:
+
 1. Copy `.env.example` to `.env` and replace secrets.
 2. Start infrastructure with `docker compose up -d`.
 3. Install dependencies with `pnpm install`.
