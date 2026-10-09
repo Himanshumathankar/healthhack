@@ -1,0 +1,9 @@
+{
+  "extends": "@healthhack/typescript-config/base",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": ".",
+    "declaration": true
+  },
+  "include": ["src/**/*.ts", "prisma/**/*.ts"]
+}

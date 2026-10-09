@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: healthhack
+          POSTGRES_PASSWORD: healthhack
+          POSTGRES_DB: healthhack
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U healthhack -d healthhack"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+    env:
+      DATABASE_URL: postgresql://healthhack:healthhack@localhost:5432/healthhack?schema=public
+      DIRECT_DATABASE_URL: postgresql://healthhack:healthhack@localhost:5432/healthhack?schema=public
+      REDIS_URL: redis://localhost:6379
+      APP_BASE_URL: http://localhost:3000
+      API_BASE_URL: http://localhost:4000
+      SESSION_SECRET: ci-session-secret-minimum-32-bytes
+      ENCRYPTION_KEY: ci-encryption-key-minimum-32-byte
+      STORAGE_REGION: ap-south-1
+      STORAGE_BUCKET: healthhack-ci
+      STORAGE_ACCESS_KEY_ID: ci
+      STORAGE_SECRET_ACCESS_KEY: ci-secret
+      EMAIL_PROVIDER: mailpit
+      EMAIL_FROM: HealthHack CI <noreply@example.test>
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @healthhack/database exec prisma validate
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+      - run: pnpm build

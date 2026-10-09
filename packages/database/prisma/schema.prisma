@@ -1,0 +1,323 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
+}
+
+enum GlobalRole {
+  SUPER_ADMIN
+}
+
+enum EventRoleName {
+  ADMIN
+  REVIEWER
+  JUDGE
+  STUDENT_COORDINATOR
+  PARTICIPANT
+}
+
+enum TeamRole {
+  TEAM_LEADER
+  TEAM_MEMBER
+}
+
+enum ParticipantStatus {
+  INVITED
+  REGISTERED
+  VERIFIED
+  ACTIVE
+  SUSPENDED
+  WITHDRAWN
+}
+
+enum TeamStatus {
+  DRAFT
+  INCOMPLETE
+  REGISTERED
+  LOCKED
+  WITHDRAWN
+  DISQUALIFIED
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+  EXPIRED
+}
+
+model User {
+  id                String              @id @default(uuid()) @db.Uuid
+  email             String              @unique @db.Citext
+  passwordHash      String
+  emailVerifiedAt   DateTime?
+  globalRole        GlobalRole?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  profile           UserProfile?
+  sessions          UserSession[]
+  emailTokens       EmailVerification[]
+  passwordTokens     PasswordReset[]
+  eventAssignments  EventRoleAssignment[]
+  participants      Participant[]
+  teamMemberships   TeamMember[]
+  auditEvents        AuditLog[]          @relation("AuditActor")
+}
+
+model UserProfile {
+  userId          String   @id @db.Uuid
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName        String
+  phone           String?
+  college         String?
+  degree          String?
+  branch          String?
+  graduationYear  Int?
+  city            String?
+  state           String?
+  linkedinUrl     String?
+  githubUrl       String?
+  portfolioUrl    String?
+  skills          String[]
+  bio             String?
+  avatarObjectId  String?  @db.Uuid
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model UserSession {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @db.Uuid
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash   String   @unique
+  userAgent   String?
+  ipAddress   String?
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([userId, revokedAt, expiresAt])
+}
+
+model EmailVerification {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, expiresAt])
+}
+
+model PasswordReset {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, expiresAt])
+}
+
+model Event {
+  id               String                @id @default(uuid()) @db.Uuid
+  slug             String                @unique
+  name             String
+  timezone         String
+  startsAt         DateTime?
+  endsAt           DateTime?
+  registrationOpen DateTime?
+  registrationClose DateTime?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  settings         EventSetting[]
+  roles            EventRoleAssignment[]
+  participants     Participant[]
+  teams            Team[]
+  tracks           Track[]
+  problemStatements ProblemStatement[]
+  auditEvents      AuditLog[]
+}
+
+model EventSetting {
+  id        String   @id @default(uuid()) @db.Uuid
+  eventId   String   @db.Uuid
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  key       String
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@unique([eventId, key])
+}
+
+model Role {
+  id          String           @id @default(uuid()) @db.Uuid
+  name        EventRoleName
+  description String?
+  permissions RolePermission[]
+  assignments EventRoleAssignment[]
+
+  @@unique([name])
+}
+
+model Permission {
+  id          String           @id @default(uuid()) @db.Uuid
+  key         String           @unique
+  description String?
+  roles       RolePermission[]
+}
+
+model RolePermission {
+  roleId       String     @db.Uuid
+  permissionId String     @db.Uuid
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model EventRoleAssignment {
+  id        String   @id @default(uuid()) @db.Uuid
+  eventId   String   @db.Uuid
+  userId    String   @db.Uuid
+  roleId    String   @db.Uuid
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now())
+
+  @@unique([eventId, userId, roleId])
+  @@index([eventId, userId])
+}
+
+model Participant {
+  id              String            @id @default(uuid()) @db.Uuid
+  eventId         String            @db.Uuid
+  userId          String            @db.Uuid
+  participantCode String
+  status          ParticipantStatus @default(REGISTERED)
+  event           Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@unique([eventId, userId])
+  @@unique([eventId, participantCode])
+  @@index([eventId, status])
+}
+
+model Track {
+  id        String   @id @default(uuid()) @db.Uuid
+  eventId   String   @db.Uuid
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  slug      String
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  teams     Team[]
+  problems  ProblemStatement[]
+
+  @@unique([eventId, slug])
+}
+
+model ProblemStatement {
+  id        String   @id @default(uuid()) @db.Uuid
+  eventId   String   @db.Uuid
+  trackId   String?  @db.Uuid
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  track     Track?   @relation(fields: [trackId], references: [id], onDelete: SetNull)
+  slug      String
+  title     String
+  body      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  teams     Team[]
+
+  @@unique([eventId, slug])
+}
+
+model Team {
+  id                 String            @id @default(uuid()) @db.Uuid
+  eventId            String            @db.Uuid
+  teamCode           String
+  name               String
+  status             TeamStatus        @default(DRAFT)
+  trackId            String?           @db.Uuid
+  problemStatementId String?           @db.Uuid
+  description        String?
+  skillsPossessed    String[]
+  skillsNeeded       String[]
+  event              Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  track              Track?            @relation(fields: [trackId], references: [id], onDelete: SetNull)
+  problemStatement   ProblemStatement? @relation(fields: [problemStatementId], references: [id], onDelete: SetNull)
+  members            TeamMember[]
+  invitations        TeamInvitation[]
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  @@unique([eventId, teamCode])
+  @@index([eventId, status])
+}
+
+model TeamMember {
+  id        String   @id @default(uuid()) @db.Uuid
+  teamId    String   @db.Uuid
+  userId    String   @db.Uuid
+  role      TeamRole
+  joinedAt  DateTime @default(now())
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@index([userId])
+}
+
+model TeamInvitation {
+  id             String           @id @default(uuid()) @db.Uuid
+  teamId         String           @db.Uuid
+  invitedEmail   String           @db.Citext
+  invitedName    String?
+  tokenHash      String           @unique
+  status         InvitationStatus @default(PENDING)
+  expiresAt      DateTime
+  acceptedUserId String?          @db.Uuid
+  team           Team             @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([teamId, status])
+  @@index([invitedEmail, status])
+}
+
+model AuditLog {
+  id            String   @id @default(uuid()) @db.Uuid
+  eventId       String?  @db.Uuid
+  actorUserId   String?  @db.Uuid
+  actorContext  String?
+  action        String
+  entityType    String
+  entityId      String
+  before        Json?
+  after         Json?
+  reason        String?
+  ipAddress     String?
+  userAgent     String?
+  correlationId String
+  createdAt     DateTime @default(now())
+  event         Event?   @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  actor         User?    @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([eventId, entityType, entityId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([correlationId])
+}

@@ -1,0 +1,22 @@
+{
+  "name": "healthhack",
+  "private": true,
+  "packageManager": "pnpm@9.15.4",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "db:generate": "pnpm --filter @healthhack/database prisma:generate",
+    "db:migrate:dev": "pnpm --filter @healthhack/database prisma:migrate:dev",
+    "db:seed:dev": "pnpm --filter @healthhack/database db:seed:dev"
+  },
+  "devDependencies": {
+    "@healthhack/eslint-config": "workspace:*",
+    "@healthhack/typescript-config": "workspace:*",
+    "prettier": "^3.3.3",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2"
+  }
+}
